@@ -8,10 +8,19 @@ import numpy as np
 """
 
 
-def stochastic_bisection(measure, gamma=0.9, maxiter=100, maxdrift=500, tol=1e-3,
-                         verbose=0, return_stats=False):
+def stochastic_bisection(measure,
+                         gamma=0.9,
+                         maxiter=100,
+                         maxdrift=500,
+                         tol=1e-3,
+                         alpha=0.0,
+                         verbose=0,
+                         lbx=0.0,
+                         ubx=1.0,
+                         increasing=False,
+                         return_stats=False):
     """
-    
+    Assumes it is a monotonic decreasing function
 
     Parameters
     ----------
@@ -43,27 +52,25 @@ def stochastic_bisection(measure, gamma=0.9, maxiter=100, maxdrift=500, tol=1e-3
     #     verbose : frequency of printings of x_m
     #     tol : tolerance (NOT IMPLEMENTED YET)
     # """
-    pc = 1.0 - gamma/2
-    p0 = pc-1e-2 #q = 1-p0
+    p0 = 1.0 - gamma/2
     points = [0.0, 1.0]
     values = [0.0, 1.0]
     x_m = 0.5 #Query point
     x_r0 = x_m #Running mean of queries
-    running_alpha = 0.1 #Memory for running mean
+    running_alpha = (1-alpha) #Forgetting for running mean
     stats = dict()
     if verbose == 0: #There won't be any verbose
         verbose = maxiter+1
     for n in range(maxiter):
-        sign_func = _signify(measure, x_m) #Noisy sign function
+        sign_func = _signify(measure, x_m, lbx, ubx, increasing) #Noisy sign function
         z_m = _drift_test(sign_func, gamma, maxdrift)
-        print(z_m, x_m, 'here')
-        if z_m == 1:
+        if z_m == -1:
             p_update = p0
-        elif z_m == -1:
+        elif z_m == 1:
             p_update = 1-p0
         else:
             continue
-        print(p_update, 1-p_update, p0, 1-p0)
+        print(x_m, z_m, p0, 1-p0, p_update, '--')
         points, values = _update_cdf(x_m, p_update, points, values)
         x_m = _get_median(points, values)
         x_r = x_r0 + running_alpha*(x_m-x_r0)
@@ -73,19 +80,21 @@ def stochastic_bisection(measure, gamma=0.9, maxiter=100, maxdrift=500, tol=1e-3
             x_r0 = x_r
         if (n+1) % verbose == 0:
             print(x_r, x_m)
+    x = (1-x_r)*lbx + x_r*ubx
     if verbose != maxiter + 1:
         print("Finished")
     if return_stats:
         stats['points'] = points
         stats['values'] = values
-        return x_r, stats
+        return x, stats
     else:
-        return x_r
+        return x
 
 
-def _signify(measure, x):
+def _signify(measure, x, lbx, ubx, increasing):
     def sign_func():
-        return np.sign(measure(x))
+        scale = 1.0 if not increasing else -1.0;
+        return scale*np.sign(measure((1-x)*lbx + x*ubx))
     return sign_func
 
 
