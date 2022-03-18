@@ -9,7 +9,7 @@ import numpy as np
 
 
 def stochastic_bisection(measure, gamma=0.9, maxiter=100, maxdrift=500, tol=1e-3,
-                         verbose=0):
+                         verbose=0, return_stats=False):
     """
     
 
@@ -44,23 +44,26 @@ def stochastic_bisection(measure, gamma=0.9, maxiter=100, maxdrift=500, tol=1e-3
     #     tol : tolerance (NOT IMPLEMENTED YET)
     # """
     pc = 1.0 - gamma/2
-    p0 = pc-1e-2
+    p0 = pc-1e-2 #q = 1-p0
     points = [0.0, 1.0]
     values = [0.0, 1.0]
-    x_m = 0.5
-    x_r0 = x_m
-    running_alpha = 0.1
-    if verbose == 0:
+    x_m = 0.5 #Query point
+    x_r0 = x_m #Running mean of queries
+    running_alpha = 0.1 #Memory for running mean
+    stats = dict()
+    if verbose == 0: #There won't be any verbose
         verbose = maxiter+1
     for n in range(maxiter):
-        sign_func = lambda x : np.sign(measure(x))
+        sign_func = _signify(measure, x_m) #Noisy sign function
         z_m = _drift_test(sign_func, gamma, maxdrift)
-        if z_m == -1:
+        print(z_m, x_m, 'here')
+        if z_m == 1:
             p_update = p0
-        elif z_m == 1:
+        elif z_m == -1:
             p_update = 1-p0
         else:
             continue
+        print(p_update, 1-p_update, p0, 1-p0)
         points, values = _update_cdf(x_m, p_update, points, values)
         x_m = _get_median(points, values)
         x_r = x_r0 + running_alpha*(x_m-x_r0)
@@ -72,7 +75,18 @@ def stochastic_bisection(measure, gamma=0.9, maxiter=100, maxdrift=500, tol=1e-3
             print(x_r, x_m)
     if verbose != maxiter + 1:
         print("Finished")
-    return x_r
+    if return_stats:
+        stats['points'] = points
+        stats['values'] = values
+        return x_r, stats
+    else:
+        return x_r
+
+
+def _signify(measure, x):
+    def sign_func():
+        return np.sign(measure(x))
+    return sign_func
 
 
 def _drift_test(sign_func, gamma, maxiter):
@@ -120,8 +134,11 @@ def _update_cdf(x, p, points, values):
     # p \in (0,1)
     # points : [x0=0,x1,x2,...,xN=1]
     # values : [y0=0,y1,y2,...,yN=1]
-    # Those represent the CDF of an uniform by parts. Let the PDF of if be f_N
-    # returns: CDF of the distribution with density f_{N+1}(y) = p*f_N(y) if y < x else (1-p)*f_N(y)
+    # Those represent the CDF of an uniform by parts.
+    # Let the PDF of if be f_N
+    # returns: 
+    # CDF of the distribution with density
+    # f_{N+1}(y) = p*f_N(y) if y < x else (1-p)*f_N(y)
     q = 1-p
     p_ = 2*p
     q_ = 2*q
