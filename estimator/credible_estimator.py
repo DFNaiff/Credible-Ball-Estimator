@@ -15,39 +15,89 @@ import numpy as np
 from . import stochastic_bisection
 
 
-def credible_ball_estimator(sampler, p, x0, N=1000, delta_step=1.0, maxiter_warming=100,
-                            maxiter=1000, tol=1e-2, maxdrift=1000, gamma=0.9, alpha=0.0,
+def credible_ball_estimator(sampler, p, x0,
+                            nsamples=1000,
+                            delta_step=1.0,
+                            maxiter_warming=100,
+                            maxiter=1000,
+                            miniter=10,
+                            tol=1e-2,
+                            logify=False,
+                            maxdrift=1000,
+                            gamma=0.9,
+                            alpha=0.0,
                             verbose=0):
     """
-        sampler(N) : returns (N,D) samples
-        p : probability that we want to P(||X - x0|| < r) equals to. Must be less than 0.99
-        x0 : x0 in the above descriptio
-        N : number of samples per step
-        delta_step: step increase in warming
-        maxiter_warming: maximum iterations in warming
-        gamma : gamma factor for drift test, as described in the article
-        maxiter : maximum number of iterations of algorithm
-        tol : tolerance (NOT IMPLEMENTED YET)
-        maxdrift : maximum number of iterations for each drift test
-        verbose : frequency of printings of x_m
+
+    Parameters
+    ----------
+    sampler : Callable[np.ndarray, np.ndarray]
+        Sampler accepting a 2d array of size (nsamples, D).
+    p : float
+        The credibility such that P(||X|| < r) = p.
+    x0 : np.ndarray
+        Ball center.
+    nsamples : int, optional
+        Number of samples. The default is 1000.
+    delta_step : float, optional
+        Step size for warming. The default is 1.0.
+    maxiter_warming : int, optional
+        Maximum warming. The default is 100.
+    maxiter : int, optional
+        Maximum number of iterations. The default is 1000.
+    miniter : int, optional
+        Minimum number of iterations before checking tolerance. The default is 10.
+    tol : float, optional
+        Error tolerance. The default is 1e-2.
+    logify : boo, optional
+        Whether to try to increase stability by finding the 
+        ball by finding the associated root of the log.
+        Somewhat risky.
+    maxdrift : int, optional
+        Maximum number of iterations for each drift test. The default is 1000.
+    gamma : float, optional
+        Gamma factor for drift test. The default is 0.9.
+    alpha : TYPE, optional
+        Memory for tolerance. The default is 0.0.
+    verbose : TYPE, optional
+        Logging frequency. The default is 0.
+
+    Raises
+    ------
+    ValueError
+        If ball is greater than maxiter_warming*delta_step.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+    TYPE
+        DESCRIPTION.
+
     """
-    # Pre warming
     k = delta_step
     warm_steps = 1
     print("Beginning warming...")
     while True:
         if warm_steps > maxiter_warming:
             raise ValueError("Too many warm steps. Increase delta step")
-        p_test = np.mean((sampler(N)**2).sum(axis=-1) < k**2)
+        p_test = np.mean((sampler(nsamples)**2).sum(axis=-1) < k**2)
         if p_test > 0.999:
             break
         else:
             k += delta_step
             warm_steps += 1
     print("k = %f" % k)
-
-    def f(r):
-        return p - np.mean((sampler(N)**2).sum(axis=-1) < r**2)
+    if not logify:
+        def f(r):
+            y0 = np.mean((sampler(nsamples)**2).sum(axis=-1) < r**2)/p
+            return 1 - y0
+    else:
+        def f(r):
+            y0 = np.mean((sampler(nsamples)**2).sum(axis=-1) < r**2)/p
+            if y0 == 0.0:
+                raise RuntimeError
+            return -np.log(y0)
     print("Beginning calculation...")
     r = stochastic_bisection.stochastic_bisection(f,
                                                   gamma=gamma,
@@ -57,4 +107,4 @@ def credible_ball_estimator(sampler, p, x0, N=1000, delta_step=1.0, maxiter_warm
                                                   tol=tol,
                                                   alpha=alpha,
                                                   verbose=verbose)
-    return r, f
+    return r

@@ -11,6 +11,7 @@ import numpy as np
 def stochastic_bisection(measure,
                          gamma=0.9,
                          maxiter=100,
+                         miniter=10,
                          maxdrift=500,
                          tol=1e-3,
                          alpha=0.0,
@@ -20,38 +21,40 @@ def stochastic_bisection(measure,
                          increasing=False,
                          return_stats=False):
     """
-    Assumes it is a monotonic decreasing function
 
     Parameters
     ----------
-    measure : TYPE
-        DESCRIPTION.
-    gamma : TYPE, optional
-        DESCRIPTION. The default is 0.9.
-    maxiter : TYPE, optional
-        DESCRIPTION. The default is 100.
-    maxdrift : TYPE, optional
-        DESCRIPTION. The default is 500.
-    tol : TYPE, optional
-        DESCRIPTION. The default is 1e-3.
-    verbose : TYPE, optional
-        DESCRIPTION. The default is 0.
+    measure : Callable[float, float]
+        The 1-D stochastic function to seek the root.
+    gamma : float, optional
+        Gamma factor for drift test. The default is 0.9.
+    maxiter : int, optional
+        Maximum number of iterations. The default is 100.
+    miniter : int, optional
+        Minimum number of iterations before checking tolerance. The default is 10.
+    maxdrift : int, optional
+        Maximum number of iterations for each drift test. The default is 500.
+    tol : float, optional
+        Error tolerance. The default is 1e-3.
+    alpha : float, optional
+        Memory for tolerance. The default is 0.0.
+    verbose : int, optional
+        Logging frequency. The default is 0.
+    lbx : float, optional
+        Lower bound of function. The default is 0.0.
+    ubx : float, optional
+        Upper bound of function. The default is 1.0.
+    increasing : bool, optional
+        Whether it is an increasing or decreasing function. The default is False.
+    return_stats : bool, optional
+        DESCRIPTION. The default is False.
 
     Returns
     -------
-    x_r : TYPE
-        DESCRIPTION.
+    float or (float, return_stats)
+        The estimated root and (if return_stats = True) the search statistics.
 
     """
-    # """
-    #     measure : function that takes a scalar as value and returns
-    #               a noisy measurement of some 1d function f:[0,1] -> R
-    #     gamma : gamma factor for drift test, as described in the article
-    #     maxiter : maximum number of iterations of algorithm
-    #     maxdrift : maximum number of iterations for each drift test
-    #     verbose : frequency of printings of x_m
-    #     tol : tolerance (NOT IMPLEMENTED YET)
-    # """
     p0 = 1.0 - gamma/2
     points = [0.0, 1.0]
     values = [0.0, 1.0]
@@ -70,11 +73,10 @@ def stochastic_bisection(measure,
             p_update = 1-p0
         else:
             continue
-        print(x_m, z_m, p0, 1-p0, p_update, '--')
         points, values = _update_cdf(x_m, p_update, points, values)
         x_m = _get_median(points, values)
         x_r = x_r0 + running_alpha*(x_m-x_r0)
-        if n >= 10 and np.abs(x_r-x_r0) <= tol:
+        if np.abs(x_r-x_r0) <= tol:
             break
         else:
             x_r0 = x_r
